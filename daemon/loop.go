@@ -192,6 +192,11 @@ func (d *Daemon) doSync(logger log.Logger) (retErr error) {
 	}
 
 	var syncErrors []event.ResourceError
+	// Since Sync() applies *all* resources we clear all errors here.
+	// If there is a recurring issue it will show up every time when
+	// this code is run.
+	d.ResourceSyncErrors = make(map[flux.ResourceID]error)
+
 	// TODO supply deletes argument from somewhere (command-line?)
 	if err := fluxsync.Sync(d.Manifests, allResources, d.Cluster, false, logger); err != nil {
 		logger.Log("err", err)
@@ -203,6 +208,7 @@ func (d *Daemon) doSync(logger log.Logger) (retErr error) {
 					Path:  e.Source(),
 					Error: e.Error.Error(),
 				})
+				d.ResourceSyncErrors[e.ResourceID()] = e.Error
 			}
 		default:
 			return err

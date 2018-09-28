@@ -14,9 +14,11 @@ import (
 	"github.com/weaveworks/flux"
 	"github.com/weaveworks/flux/api"
 	"github.com/weaveworks/flux/api/v10"
+	"github.com/weaveworks/flux/api/v11"
 	"github.com/weaveworks/flux/api/v6"
 	"github.com/weaveworks/flux/api/v9"
 	"github.com/weaveworks/flux/cluster"
+	"github.com/weaveworks/flux/cluster/kubernetes"
 	"github.com/weaveworks/flux/event"
 	"github.com/weaveworks/flux/git"
 	"github.com/weaveworks/flux/guid"
@@ -27,7 +29,6 @@ import (
 	"github.com/weaveworks/flux/release"
 	"github.com/weaveworks/flux/resource"
 	"github.com/weaveworks/flux/update"
-	"github.com/weaveworks/flux/api/v11"
 )
 
 const (
@@ -42,17 +43,18 @@ const (
 // Daemon is the fully-functional state of a daemon (compare to
 // `NotReadyDaemon`).
 type Daemon struct {
-	V              string
-	Cluster        cluster.Cluster
-	Manifests      cluster.Manifests
-	Registry       registry.Registry
-	ImageRefresh   chan image.Name
-	Repo           *git.Repo
-	GitConfig      git.Config
-	Jobs           *job.Queue
-	JobStatusCache *job.StatusCache
-	EventWriter    event.EventWriter
-	Logger         log.Logger
+	V                  string
+	Cluster            cluster.Cluster
+	Manifests          cluster.Manifests
+	Registry           registry.Registry
+	ImageRefresh       chan image.Name
+	Repo               *git.Repo
+	GitConfig          git.Config
+	Jobs               *job.Queue
+	JobStatusCache     *job.StatusCache
+	EventWriter        event.EventWriter
+	Logger             log.Logger
+	ResourceSyncErrors map[flux.ResourceID]error
 	// bookkeeping
 	*LoopVars
 }
@@ -135,6 +137,10 @@ func (d *Daemon) ListServicesWithOptions(ctx context.Context, opts v11.ListServi
 			readOnly = missingReason
 		case service.IsSystem:
 			readOnly = v6.ReadOnlySystem
+		}
+		if syncerr, ok := d.ResourceSyncErrors[service.ID]; ok {
+			service.Rollout.Messages = append(service.Rollout.Messages, syncerr.Error())
+			service.Status = kubernetes.StatusError
 		}
 		res = append(res, v6.ControllerStatus{
 			ID:         service.ID,
