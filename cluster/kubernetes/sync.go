@@ -30,7 +30,7 @@ func (c *changeSet) stage(cmd string, o *apiObject) {
 
 // Applier is something that will apply a changeset to the cluster.
 type Applier interface {
-	apply(log.Logger, changeSet) cluster.SyncError
+	apply(log.Logger, changeSet, bool) cluster.SyncError
 }
 
 type Kubectl struct {
@@ -113,19 +113,25 @@ func (objs applyOrder) Less(i, j int) bool {
 	return ranki < rankj
 }
 
-func (c *Kubectl) apply(logger log.Logger, cs changeSet) (errs cluster.SyncError) {
+func (c *Kubectl) apply(logger log.Logger, cs changeSet, likelyErrors bool) (errs cluster.SyncError) {
 	f := func(objs []*apiObject, cmd string, args ...string) {
 		if len(objs) == 0 {
 			return
 		}
 		logger.Log("cmd", cmd, "args", strings.Join(args, " "), "count", len(objs))
 		args = append(args, cmd)
-		if err := c.doCommand(logger, makeMultidoc(objs), args...); err != nil {
-			for _, obj := range objs {
-				r := bytes.NewReader(obj.Bytes())
-				if err := c.doCommand(logger, r, args...); err != nil {
-					errs = append(errs, cluster.ResourceError{obj.Resource, err})
-				}
+
+		// Only do the whole bunch if we don't expect some of the
+		// resources to fail.
+		if !likelyErrors {
+			if err := c.doCommand(logger, makeMultidoc(objs), args...); err == nil {
+				return // success
+			}
+		}
+		for _, obj := range objs {
+			r := bytes.NewReader(obj.Bytes())
+			if err := c.doCommand(logger, r, args...); err != nil {
+				errs = append(errs, cluster.ResourceError{obj.Resource, err})
 			}
 		}
 	}

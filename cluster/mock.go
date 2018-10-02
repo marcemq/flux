@@ -39,7 +39,7 @@ func (m *Mock) Export() ([]byte, error) {
 	return m.ExportFunc()
 }
 
-func (m *Mock) Sync(c SyncDef) error {
+func (m *Mock) Sync(c SyncDef, likelyErrors bool) error {
 	return m.SyncFunc(c)
 }
 

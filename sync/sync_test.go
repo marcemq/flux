@@ -40,7 +40,7 @@ func TestSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Sync(log.NewNopLogger(), manifests, resources, clus, true); err != nil {
+	if err := Sync(log.NewNopLogger(), manifests, resources, clus, true, false); err != nil {
 		t.Fatal(err)
 	}
 	checkClusterMatchesFiles(t, manifests, clus, checkout.Dir(), dirs)
@@ -60,7 +60,7 @@ func TestSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Sync(log.NewNopLogger(), manifests, resources, clus, true); err != nil {
+	if err := Sync(log.NewNopLogger(), manifests, resources, clus, true, false); err != nil {
 		t.Fatal(err)
 	}
 	checkClusterMatchesFiles(t, manifests, clus, checkout.Dir(), dirs)
@@ -200,7 +200,7 @@ type syncCluster struct {
 	resources map[string][]byte
 }
 
-func (p *syncCluster) Sync(def cluster.SyncDef) error {
+func (p *syncCluster) Sync(def cluster.SyncDef, likelyErrors bool) error {
 	println("=== Syncing ===")
 	for _, action := range def.Actions {
 		if action.Delete != nil {
