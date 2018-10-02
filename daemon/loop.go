@@ -191,29 +191,31 @@ func (d *Daemon) doSync(logger log.Logger) (retErr error) {
 		return errors.Wrap(err, "loading resources from repo")
 	}
 
-	var syncErrors []event.ResourceError
-	// Since Sync() applies *all* resources we clear all errors here.
-	// If there is a recurring issue it will show up every time when
-	// this code is run.
-	d.ResourceSyncErrors = make(map[flux.ResourceID]error)
-
+	syncErrors := make(map[flux.ResourceID]error)
+	var resourceErrors []event.ResourceError
 	// TODO supply deletes argument from somewhere (command-line?)
 	if err := fluxsync.Sync(d.Manifests, allResources, d.Cluster, false, logger); err != nil {
 		logger.Log("err", err)
 		switch syncerr := err.(type) {
 		case cluster.SyncError:
 			for _, e := range syncerr {
-				syncErrors = append(syncErrors, event.ResourceError{
+				resourceErrors = append(resourceErrors, event.ResourceError{
 					ID:    e.ResourceID(),
 					Path:  e.Source(),
 					Error: e.Error.Error(),
 				})
-				d.ResourceSyncErrors[e.ResourceID()] = e.Error
+				syncErrors[e.ResourceID()] = e.Error
 			}
 		default:
 			return err
 		}
 	}
+	// Since fluxsync.Sync() applies *all* resources we replace
+	// all errors here. If there is a recurring issue it will
+	// show up every time when they sync is run.
+	d.syncErrors.mu.Lock()
+	d.syncErrors.errs = syncErrors
+	d.syncErrors.mu.Unlock()
 
 	// update notes and emit events for applied commits
 
@@ -374,7 +376,7 @@ func (d *Daemon) doSync(logger log.Logger) (retErr error) {
 				Commits:     cs,
 				InitialSync: initialSync,
 				Includes:    includes,
-				Errors:      syncErrors,
+				Errors:      resourceErrors,
 			},
 		}); err != nil {
 			logger.Log("err", err)

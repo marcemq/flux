@@ -43,18 +43,18 @@ const (
 // Daemon is the fully-functional state of a daemon (compare to
 // `NotReadyDaemon`).
 type Daemon struct {
-	V                  string
-	Cluster            cluster.Cluster
-	Manifests          cluster.Manifests
-	Registry           registry.Registry
-	ImageRefresh       chan image.Name
-	Repo               *git.Repo
-	GitConfig          git.Config
-	Jobs               *job.Queue
-	JobStatusCache     *job.StatusCache
-	EventWriter        event.EventWriter
-	Logger             log.Logger
-	ResourceSyncErrors map[flux.ResourceID]error
+	V              string
+	Cluster        cluster.Cluster
+	Manifests      cluster.Manifests
+	Registry       registry.Registry
+	ImageRefresh   chan image.Name
+	Repo           *git.Repo
+	GitConfig      git.Config
+	Jobs           *job.Queue
+	JobStatusCache *job.StatusCache
+	EventWriter    event.EventWriter
+	Logger         log.Logger
+	syncErrors     SyncErrors
 	// bookkeeping
 	*LoopVars
 }
@@ -138,10 +138,12 @@ func (d *Daemon) ListServicesWithOptions(ctx context.Context, opts v11.ListServi
 		case service.IsSystem:
 			readOnly = v6.ReadOnlySystem
 		}
-		if syncerr, ok := d.ResourceSyncErrors[service.ID]; ok {
+		d.syncErrors.mu.Lock()
+		if syncerr, ok := d.syncErrors.errs[service.ID]; ok {
 			service.Rollout.Messages = append(service.Rollout.Messages, syncerr.Error())
 			service.Status = kubernetes.StatusError
 		}
+		d.syncErrors.mu.Unlock()
 		res = append(res, v6.ControllerStatus{
 			ID:         service.ID,
 			Containers: containers2containers(service.ContainersOrNil()),
